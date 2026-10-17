@@ -1,0 +1,53 @@
+# =============================================================================
+# F Train Tracker — Configuration
+# =============================================================================
+
+# --- Station Settings --------------------------------------------------------
+
+# GTFS stop ID for East Broadway (F train)
+# The MTA uses "F16" as the parent stop ID for East Broadway.
+# Platform-level IDs are auto-generated: F16N (northbound) / F16S (southbound)
+station_stop_id: "F16"
+station_name: "East Broadway"
+
+# --- Discord Settings --------------------------------------------------------
+
+# Role ID to @mention when a train is approaching.
+# To find this: enable Developer Mode in Discord (User Settings → Advanced),
+# then right-click the role in Server Settings → Roles and click "Copy Role ID".
+# Leave empty ("") to send notifications without pinging a role.
+discord_role_id: ""
+
+# --- Direction ---------------------------------------------------------------
+# Which direction(s) to watch for approaching trains.
+#   "uptown"   — Northbound toward Queens (via Midtown Manhattan)
+#   "downtown" — Southbound toward Coney Island (via Brooklyn)
+#   "both"     — Watch both directions
+direction: "both"
+
+# --- Alert Threshold ---------------------------------------------------------
+# Send a Discord notification when an F train is this many minutes (or fewer)
+# away from the station.
+alert_threshold_minutes: 5
+
+# --- Active Schedule ---------------------------------------------------------
+# The tracker only sends alerts during these time windows (Eastern Time).
+# You can define as many windows as you like. Each window specifies:
+#   days       — list of lowercase day names
+#   start_time — "HH:MM" (24-hour format)
+#   end_time   — "HH:MM" (24-hour format)
+#
+# Example: weekday morning and evening commute windows
+time_windows:
+  - days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+    start_time: "07:00"
+    end_time: "09:30"
+
+  - days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+    start_time: "17:00"
+    end_time: "19:30"
+
+# Uncomment to add weekend coverage:
+#  - days: ["saturday", "sunday"]
+#    start_time: "10:00"
+#    end_time: "14:00"
