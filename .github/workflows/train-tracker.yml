@@ -1,0 +1,64 @@
+# ── GitHub Actions Workflow: F Train Tracker ──────────────────────────────────
+#
+# Runs every 5 minutes, checks if we're inside an active time window,
+# and — if so — queries the MTA GTFS-RT feed for approaching F trains
+# at East Broadway, notifying a Discord channel via webhook.
+#
+# Required repository secrets:
+#   DISCORD_WEBHOOK_URL  — Full Discord webhook URL
+#   MTA_API_KEY          — MTA API key (free @ https://api.mta.info)
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: F Train Tracker
+
+on:
+  # ── Scheduled runs ────────────────────────────────────────────────────────
+  # Every 5 minutes, every day. The Python script itself enforces the
+  # user-configured active days & time windows — runs outside those windows
+  # exit immediately (< 5 seconds, negligible Actions usage).
+  #
+  # To save Actions minutes you can tighten this cron. For example, to run
+  # only on weekdays between 11:00–14:00 and 21:00–00:00 UTC (≈ 7–10 AM
+  # and 5–8 PM Eastern):
+  #   cron: '*/5 11-13,21-23 * * 1-5'
+  schedule:
+    - cron: "*/5 * * * *"
+
+  # ── Manual trigger ───────────────────────────────────────────────────────
+  # Lets you run the tracker on-demand from the Actions tab for testing.
+  workflow_dispatch:
+
+jobs:
+  check-trains:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Cache: dedup file ────────────────────────────────────────────────
+      # Persists .notified_cache.json between runs so we don't re-alert
+      # for the same approaching train on consecutive 5-minute checks.
+      - name: Restore notification cache
+        uses: actions/cache@v4
+        with:
+          path: .notified_cache.json
+          # Key rotates daily so stale entries don't pile up forever.
+          key: notified-cache-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            notified-cache-${{ runner.os }}-
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run F Train Tracker
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          MTA_API_KEY: ${{ secrets.MTA_API_KEY }}
+        run: python check_trains.py
