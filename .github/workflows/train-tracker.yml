@@ -21,8 +21,8 @@ on:
   # only on weekdays between 11:00–14:00 and 21:00–00:00 UTC (≈ 7–10 AM
   # and 5–8 PM Eastern):
   #   cron: '*/5 11-13,21-23 * * 1-5'
-  schedule:
-    - cron: "*/5 * * * *"
+  repository_dispatch:
+    types: [check-trains-cron]
 
   # ── Manual trigger ───────────────────────────────────────────────────────
   # Lets you run the tracker on-demand from the Actions tab for testing.
