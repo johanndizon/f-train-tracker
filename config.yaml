@@ -23,12 +23,12 @@ discord_role_id: "1555420586153345104"
 #   "uptown"   — Northbound toward Queens (via Midtown Manhattan)
 #   "downtown" — Southbound toward Coney Island (via Brooklyn)
 #   "both"     — Watch both directions
-direction: "both"
+direction: "uptown"
 
 # --- Alert Threshold ---------------------------------------------------------
 # Send a Discord notification when an F train is this many minutes (or fewer)
 # away from the station.
-alert_threshold_minutes: 15
+alert_threshold_minutes: 7
 
 # --- Active Schedule ---------------------------------------------------------
 # The tracker only sends alerts during these time windows (Eastern Time).
@@ -39,15 +39,15 @@ alert_threshold_minutes: 15
 #
 # Example: weekday morning and evening commute windows
 time_windows:
-  - days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
-    start_time: "07:00"
+  - days: ["monday", "wednesday", "thursday"]
+    start_time: "07:30"
     end_time: "09:30"
 
-  - days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
-    start_time: "17:00"
-    end_time: "19:30"
+ # - days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+ #   start_time: "17:00"
+ #   end_time: "19:30"
 
 # Uncomment to add weekend coverage:
-  - days: ["saturday", "sunday"]
-    start_time: "01:00"
-    end_time: "14:00"
+ # - days: ["saturday", "sunday"]
+ #   start_time: "01:00"
+ #   end_time: "14:00"
