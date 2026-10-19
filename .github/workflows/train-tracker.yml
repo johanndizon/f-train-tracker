@@ -22,7 +22,7 @@ on:
   # and 5–8 PM Eastern):
   #   cron: '*/5 11-13,21-23 * * 1-5'
   repository_dispatch:
-    types: [check-trains-cron]
+    types: [check-trains]
 
   # ── Manual trigger ───────────────────────────────────────────────────────
   # Lets you run the tracker on-demand from the Actions tab for testing.
