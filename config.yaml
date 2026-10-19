@@ -40,7 +40,7 @@ alert_threshold_minutes: 7
 # Example: weekday morning and evening commute windows
 time_windows:
   - days: ["monday", "wednesday", "thursday"]
-    start_time: "07:30"
+    start_time: "09:00"
     end_time: "09:30"
 
  # - days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
