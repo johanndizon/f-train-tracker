@@ -16,7 +16,7 @@ station_name: "East Broadway"
 # To find this: enable Developer Mode in Discord (User Settings → Advanced),
 # then right-click the role in Server Settings → Roles and click "Copy Role ID".
 # Leave empty ("") to send notifications without pinging a role.
-discord_role_id: "1555420586153345104"
+discord_role_id: ""
 
 # --- Direction ---------------------------------------------------------------
 # Which direction(s) to watch for approaching trains.
@@ -40,7 +40,7 @@ alert_threshold_minutes: 7
 # Example: weekday morning and evening commute windows
 time_windows:
   - days: ["monday", "wednesday", "thursday"]
-    start_time: "09:00"
+    start_time: "07:45"
     end_time: "09:30"
 
  # - days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
