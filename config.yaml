@@ -23,7 +23,7 @@ discord_role_id: ""
 # station. Useful for timing your walk to the platform.
 
 train_tracker:
-  enabled: true
+  enabled: false
 
   # "uptown" (Queens-bound), "downtown" (Brooklyn-bound), or "both"
   direction: "both"
@@ -57,9 +57,9 @@ service_alerts:
 
   # When to check for disruptions (typically broader than commute windows)
   time_windows:
-    - days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
-      start_time: "05:00"
+    - days: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+      start_time: "00:00"
       end_time: "23:59"
-    - days: ["saturday", "sunday"]
-      start_time: "07:00"
-      end_time: "23:59"
+    #- days: ["saturday", "sunday"]
+      #start_time: "07:00"
+      #end_time: "23:59"
