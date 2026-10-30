@@ -1,53 +1,65 @@
 # =============================================================================
-# F Train Tracker — Configuration
+# F Train Monitor — Combined Configuration
+# =============================================================================
+# Two independent features, each with its own on/off switch and schedule.
 # =============================================================================
 
-# --- Station Settings --------------------------------------------------------
+# --- Station ─────────────────────────────────────────────────────────────────
 
-# GTFS stop ID for East Broadway (F train)
-# The MTA uses "F16" as the parent stop ID for East Broadway.
-# Platform-level IDs are auto-generated: F16N (northbound) / F16S (southbound)
 station_stop_id: "F16"
 station_name: "East Broadway"
+primary_route: "F"
 
-# --- Discord Settings --------------------------------------------------------
+# --- Discord ─────────────────────────────────────────────────────────────────
 
-# Role ID to @mention when a train is approaching.
-# To find this: enable Developer Mode in Discord (User Settings → Advanced),
-# then right-click the role in Server Settings → Roles and click "Copy Role ID".
-# Leave empty ("") to send notifications without pinging a role.
+# Role ID to @mention. Leave "" for no ping.
+# (Developer Mode → right-click role → Copy Role ID)
 discord_role_id: ""
 
-# --- Direction ---------------------------------------------------------------
-# Which direction(s) to watch for approaching trains.
-#   "uptown"   — Northbound toward Queens (via Midtown Manhattan)
-#   "downtown" — Southbound toward Coney Island (via Brooklyn)
-#   "both"     — Watch both directions
-direction: "uptown"
+# =============================================================================
+# FEATURE 1 — Train Tracker (ETA countdown)
+# =============================================================================
+# Sends a ping when an F train is within a set number of minutes of the
+# station. Useful for timing your walk to the platform.
 
-# --- Alert Threshold ---------------------------------------------------------
-# Send a Discord notification when an F train is this many minutes (or fewer)
-# away from the station.
-alert_threshold_minutes: 7
+train_tracker:
+  enabled: true
 
-# --- Active Schedule ---------------------------------------------------------
-# The tracker only sends alerts during these time windows (Eastern Time).
-# You can define as many windows as you like. Each window specifies:
-#   days       — list of lowercase day names
-#   start_time — "HH:MM" (24-hour format)
-#   end_time   — "HH:MM" (24-hour format)
-#
-# Example: weekday morning and evening commute windows
-time_windows:
-  - days: ["monday", "wednesday", "thursday"]
-    start_time: "07:45"
-    end_time: "09:30"
+  # "uptown" (Queens-bound), "downtown" (Brooklyn-bound), or "both"
+  direction: "both"
 
- # - days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
- #   start_time: "17:00"
- #   end_time: "19:30"
+  # Alert when a train is ≤ this many minutes away
+  alert_threshold_minutes: 5
 
-# Uncomment to add weekend coverage:
- # - days: ["saturday", "sunday"]
- #   start_time: "01:00"
- #   end_time: "14:00"
+  # When to send ETA alerts (Eastern Time, 24-hour format)
+  time_windows:
+    - days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+      start_time: "07:00"
+      end_time: "09:30"
+    - days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+      start_time: "17:00"
+      end_time: "19:30"
+
+# =============================================================================
+# FEATURE 2 — Service Alerts (delays, disruptions, reroutes)
+# =============================================================================
+# Monitors for delays, suspensions, service changes, planned work, and
+# non-F trains being rerouted through the station.
+
+service_alerts:
+  enabled: true
+
+  # MTA service alerts (delays, suspensions, planned work, detours, etc.)
+  delays_and_alerts: true
+
+  # Detect non-F trains stopping at East Broadway (reroutes)
+  unusual_routes: true
+
+  # When to check for disruptions (typically broader than commute windows)
+  time_windows:
+    - days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+      start_time: "05:00"
+      end_time: "23:59"
+    - days: ["saturday", "sunday"]
+      start_time: "07:00"
+      end_time: "23:59"
