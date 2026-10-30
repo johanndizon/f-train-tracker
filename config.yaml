@@ -14,7 +14,7 @@ primary_route: "F"
 
 # Role ID to @mention. Leave "" for no ping.
 # (Developer Mode → right-click role → Copy Role ID)
-discord_role_id: ""
+discord_role_id: "1555420586153345104"
 
 # =============================================================================
 # FEATURE 1 — Train Tracker (ETA countdown)
