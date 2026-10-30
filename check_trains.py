@@ -57,10 +57,32 @@ EFFECT_MAP = {
     4: ("Detour", "↪️", COLOR_ORANGE),
     5: ("Additional Service", "➕", COLOR_BLUE),
     6: ("Modified Service", "🔀", COLOR_ORANGE),
-    7: ("Other", "ℹ️", COLOR_BLUE),
-    8: ("Unknown", "❓", COLOR_BLUE),
+    7: ("Service Alert", "ℹ️", COLOR_BLUE),
+    8: (None, None, None),  # Unknown — will be inferred from text
     9: ("Stop Moved", "📍", COLOR_ORANGE),
 }
+
+# Keywords for inferring alert type when MTA sets effect to UNKNOWN
+_INFER_RULES: list[tuple[list[str], str, str, int]] = [
+    # (keywords, label, emoji, color)
+    (["suspend", "no service", "no trains"],          "Suspended",        "🚫", COLOR_RED),
+    (["delay", "delays", "delayed"],                  "Delays",           "🐢", COLOR_RED),
+    (["planned work", "planned service change"],      "Planned Work",     "🔧", COLOR_BLUE),
+    (["service change", "reroute", "running via",
+     "running local", "running express",
+     "skipping", "skip"],                             "Service Change",   "🔀", COLOR_ORANGE),
+    (["slow speed", "slow speeds"],                   "Slow Speeds",      "🐢", COLOR_YELLOW),
+    (["accessibility", "elevator", "escalator"],      "Accessibility",    "♿", COLOR_BLUE),
+]
+
+
+def _infer_effect(header: str, description: str) -> tuple[str, str, int]:
+    """Infer alert type from text when GTFS-RT effect is UNKNOWN."""
+    text = (header + " " + description).lower()
+    for keywords, label, emoji, color in _INFER_RULES:
+        if any(kw in text for kw in keywords):
+            return label, emoji, color
+    return "Service Alert", "⚠️", COLOR_YELLOW
 
 
 # ── Timezone ─────────────────────────────────────────────────────────────────
@@ -257,9 +279,16 @@ def send_train_notification(webhook_url: str, train: dict, role_id: str, station
 # =============================================================================
 
 def find_relevant_alerts(feed: gtfs_realtime_pb2.FeedMessage, config: dict) -> list[dict]:
-    """Find active MTA service alerts for the configured route/station."""
+    """Find active MTA service alerts for the configured route/station.
+
+    Filtering behavior depends on config['service_alerts']['filter_mode']:
+      - "station_only"     : only alerts referencing East Broadway's stop ID
+      - "line_and_station" : station alerts + system-wide F alerts (no stops listed)
+      - "entire_line"      : any alert mentioning the F route
+    """
     station_id = config["station_stop_id"]
     primary_route = config["primary_route"]
+    filter_mode = config.get("service_alerts", {}).get("filter_mode", "station_only")
     now_ts = datetime.now(timezone.utc).timestamp()
 
     results: list[dict] = []
@@ -280,9 +309,10 @@ def find_relevant_alerts(feed: gtfs_realtime_pb2.FeedMessage, config: dict) -> l
         if not is_current:
             continue
 
-        # Check relevance
+        # Gather what the alert references
         matches_route = False
         matches_station = False
+        has_any_stops = False
         affected_routes: set[str] = set()
 
         for ie in alert.informed_entity:
@@ -290,23 +320,41 @@ def find_relevant_alerts(feed: gtfs_realtime_pb2.FeedMessage, config: dict) -> l
                 affected_routes.add(ie.route_id)
                 if ie.route_id == primary_route:
                     matches_route = True
-            if ie.stop_id and ie.stop_id.startswith(station_id):
-                matches_station = True
+            if ie.stop_id:
+                has_any_stops = True
+                if ie.stop_id.startswith(station_id):
+                    matches_station = True
 
-        if not (matches_route or matches_station):
-            continue
+        # ── Apply filter mode ──────────────────────────────────────────
+        if filter_mode == "station_only":
+            # Must explicitly reference East Broadway
+            if not matches_station:
+                continue
 
+        elif filter_mode == "line_and_station":
+            # Station match, OR system-wide F alert (route match with no stops)
+            if not matches_station:
+                if not (matches_route and not has_any_stops):
+                    continue
+
+        else:  # "entire_line"
+            if not (matches_route or matches_station):
+                continue
+
+        # ── Build alert info ───────────────────────────────────────────
         header = _translated_text(alert.header_text)
         description = _translated_text(alert.description_text)
-        effect_val = alert.effect if alert.effect else 7
-        effect_label, effect_emoji, color = EFFECT_MAP.get(effect_val, ("Other", "ℹ️", COLOR_BLUE))
 
-        if matches_station and matches_route:
-            relevance = f"{primary_route} train at {config['station_name']}"
-        elif matches_station:
-            relevance = f"{config['station_name']} station"
+        # Determine label, emoji, color — infer from text if MTA used UNKNOWN
+        effect_val = alert.effect if alert.effect else 8
+        mapped = EFFECT_MAP.get(effect_val)
+
+        if mapped and mapped[0] is not None:
+            # Known effect type
+            effect_label, effect_emoji, color = mapped
         else:
-            relevance = f"{primary_route} train line"
+            # UNKNOWN or unmapped — infer from the alert text
+            effect_label, effect_emoji, color = _infer_effect(header, description)
 
         results.append({
             "alert_id": entity.id,
@@ -316,7 +364,6 @@ def find_relevant_alerts(feed: gtfs_realtime_pb2.FeedMessage, config: dict) -> l
             "effect_emoji": effect_emoji,
             "color": color,
             "affected_routes": sorted(affected_routes),
-            "relevance": relevance,
         })
 
     return results
@@ -366,11 +413,10 @@ def send_service_alert_notification(webhook_url: str, alert: dict, role_id: str,
     routes_str = ", ".join(alert["affected_routes"]) if alert["affected_routes"] else "—"
 
     embed = {
-        "title": f"{alert['effect_emoji']}  {alert['effect_label']} — {station_name}",
+        "title": f"{alert['effect_emoji']}  {alert['effect_label']}",
         "description": alert["header"],
         "color": alert["color"],
         "fields": [
-            {"name": "Relevance", "value": alert["relevance"], "inline": True},
             {"name": "Affected Lines", "value": routes_str, "inline": True},
         ],
         "footer": {"text": f"Alert ID: {alert['alert_id']}  •  MTA Service Alerts"},
