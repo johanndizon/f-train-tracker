@@ -14,7 +14,7 @@ primary_route: "F"
 
 # Role ID to @mention. Leave "" for no ping.
 # (Developer Mode → right-click role → Copy Role ID)
-discord_role_id: "1555420586153345104"
+discord_role_id: ""
 
 # =============================================================================
 # FEATURE 1 — Train Tracker (ETA countdown)
@@ -23,7 +23,7 @@ discord_role_id: "1555420586153345104"
 # station. Useful for timing your walk to the platform.
 
 train_tracker:
-  enabled: false
+  enabled: true
 
   # "uptown" (Queens-bound), "downtown" (Brooklyn-bound), or "both"
   direction: "both"
@@ -55,6 +55,9 @@ service_alerts:
   # Detect non-F trains stopping at East Broadway (reroutes)
   unusual_routes: true
 
+  # Routes to exclude from unusual train alerts (e.g. FX is the peak-hour F Express)
+  ignored_unusual_routes: ["FX"]
+
   # How strictly to filter alerts:
   #   "station_only"      — Only alerts that specifically reference East Broadway
   #                         in their data. Strictest, cuts out noise from other
@@ -63,7 +66,7 @@ service_alerts:
   #                         F train alerts that don't specify any particular stops.
   #   "entire_line"       — Any alert mentioning the F train, anywhere on the line.
   #                         Noisiest.
-  filter_mode: "line_and_station"
+  filter_mode: "station_only"
 
   # When to check for disruptions (typically broader than commute windows)
   time_windows:

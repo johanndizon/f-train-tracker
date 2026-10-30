@@ -199,12 +199,14 @@ def find_approaching_trains(feed: gtfs_realtime_pb2.FeedMessage, config: dict) -
         watch_ids.add(f"{station_id}S")
 
     results: list[dict] = []
+    primary = config["primary_route"]
+    valid_routes = {primary, f"{primary}X"}
 
     for entity in feed.entity:
         if not entity.HasField("trip_update"):
             continue
         trip = entity.trip_update
-        if trip.trip.route_id != config["primary_route"]:
+        if trip.trip.route_id not in valid_routes:
             continue
 
         for stu in trip.stop_time_update:
@@ -318,7 +320,7 @@ def find_relevant_alerts(feed: gtfs_realtime_pb2.FeedMessage, config: dict) -> l
         for ie in alert.informed_entity:
             if ie.route_id:
                 affected_routes.add(ie.route_id)
-                if ie.route_id == primary_route:
+                if ie.route_id in (primary_route, f"{primary_route}X"):
                     matches_route = True
             if ie.stop_id:
                 has_any_stops = True
@@ -373,6 +375,12 @@ def find_unusual_routes(feed: gtfs_realtime_pb2.FeedMessage, config: dict) -> li
     """Detect non-primary-route trains stopping at the station."""
     station_id = config["station_stop_id"]
     primary_route = config["primary_route"]
+
+    # Exclude primary route, variants like FX, and any configured ignored routes
+    ignored = set(config.get("service_alerts", {}).get("ignored_unusual_routes", ["FX"]))
+    ignored.add(primary_route)
+    ignored.add(f"{primary_route}X")
+
     unusual: dict[str, dict] = {}
 
     for entity in feed.entity:
@@ -380,7 +388,7 @@ def find_unusual_routes(feed: gtfs_realtime_pb2.FeedMessage, config: dict) -> li
             continue
         trip = entity.trip_update
         route_id = trip.trip.route_id
-        if route_id == primary_route:
+        if route_id in ignored:
             continue
 
         for stu in trip.stop_time_update:
