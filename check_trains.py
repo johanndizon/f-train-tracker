@@ -34,6 +34,17 @@ CACHE_PATH = Path(__file__).parent / ".notified_cache.json"
 BDFM_FEED_URL = "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-bdfm"
 ALERTS_FEED_URL = "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts"
 
+# Feeds to scan for unusual routes at the station.
+# Rerouted trains (e.g. A and C running via the F line / Rutgers St Tunnel)
+# are published in their own line feeds, not the BDFM feed.
+UNUSUAL_ROUTES_FEEDS = {
+    "ACE":  "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-ace",
+    "BDFM": "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-bdfm",
+    "G":    "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g",
+    "JZ":   "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-jz",
+    "NQRW": "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-nqrw",
+}
+
 # Dedup TTLs (seconds)
 DEDUP_TTL_TRAIN = 15 * 60       # 15 min — same approaching train
 DEDUP_TTL_ALERT = 6 * 60 * 60   # 6 hrs  — same service alert
@@ -160,7 +171,8 @@ def mark_notified(identifier: str) -> None:
 
 def fetch_feed(url: str, api_key: str | None = None) -> gtfs_realtime_pb2.FeedMessage:
     headers = {}
-    if api_key:
+    # Only send x-api-key if it's an actual key, not a URL
+    if api_key and not api_key.startswith("http"):
         headers["x-api-key"] = api_key
     resp = requests.get(url, headers=headers, timeout=30)
     resp.raise_for_status()
@@ -311,6 +323,12 @@ def find_relevant_alerts(feed: gtfs_realtime_pb2.FeedMessage, config: dict) -> l
         if not is_current:
             continue
 
+        # ── Extract text early to check names and reroutes ─────────────
+        header = _translated_text(alert.header_text)
+        description = _translated_text(alert.description_text)
+        full_text = (header + " " + description).lower()
+        station_name_lower = config.get("station_name", "East Broadway").lower()
+
         # Gather what the alert references
         matches_route = False
         matches_station = False
@@ -327,9 +345,19 @@ def find_relevant_alerts(feed: gtfs_realtime_pb2.FeedMessage, config: dict) -> l
                 if ie.stop_id.startswith(station_id):
                     matches_station = True
 
+        # Also match if East Broadway is explicitly named in the alert text
+        if station_name_lower in full_text:
+            matches_station = True
+
+        # Also match if an alert describes trains (like A or C) rerouting via
+        # the F line across the Rutgers St Tunnel corridor between Manhattan & Brooklyn
+        if any(term in full_text for term in ["via the f", "via f line", "over the f", "along the f", "rutgers"]):
+            if any(term in full_text for term in ["jay st", "canal", "w 4", "delancey", "essex", "brooklyn", "rutgers"]):
+                matches_station = True
+
         # ── Apply filter mode ──────────────────────────────────────────
         if filter_mode == "station_only":
-            # Must explicitly reference East Broadway
+            # Must explicitly reference East Broadway or its corridor reroutes
             if not matches_station:
                 continue
 
@@ -342,10 +370,6 @@ def find_relevant_alerts(feed: gtfs_realtime_pb2.FeedMessage, config: dict) -> l
         else:  # "entire_line"
             if not (matches_route or matches_station):
                 continue
-
-        # ── Build alert info ───────────────────────────────────────────
-        header = _translated_text(alert.header_text)
-        description = _translated_text(alert.description_text)
 
         # Determine label, emoji, color — infer from text if MTA used UNKNOWN
         effect_val = alert.effect if alert.effect else 8
@@ -371,8 +395,8 @@ def find_relevant_alerts(feed: gtfs_realtime_pb2.FeedMessage, config: dict) -> l
     return results
 
 
-def find_unusual_routes(feed: gtfs_realtime_pb2.FeedMessage, config: dict) -> list[dict]:
-    """Detect non-primary-route trains stopping at the station."""
+def find_unusual_routes(feeds: list[gtfs_realtime_pb2.FeedMessage], config: dict) -> list[dict]:
+    """Detect non-primary-route trains stopping at the station across all scanned feeds."""
     station_id = config["station_stop_id"]
     primary_route = config["primary_route"]
 
@@ -383,27 +407,28 @@ def find_unusual_routes(feed: gtfs_realtime_pb2.FeedMessage, config: dict) -> li
 
     unusual: dict[str, dict] = {}
 
-    for entity in feed.entity:
-        if not entity.HasField("trip_update"):
-            continue
-        trip = entity.trip_update
-        route_id = trip.trip.route_id
-        if route_id in ignored:
-            continue
+    for feed in feeds:
+        for entity in feed.entity:
+            if not entity.HasField("trip_update"):
+                continue
+            trip = entity.trip_update
+            route_id = trip.trip.route_id
+            if route_id in ignored:
+                continue
 
-        for stu in trip.stop_time_update:
-            if stu.stop_id.startswith(station_id) and route_id not in unusual:
-                direction = (
-                    "Northbound" if stu.stop_id.endswith("N") else
-                    "Southbound" if stu.stop_id.endswith("S") else
-                    "Unknown"
-                )
-                unusual[route_id] = {
-                    "route_id": route_id,
-                    "stop_id": stu.stop_id,
-                    "direction": direction,
-                    "trip_id": trip.trip.trip_id,
-                }
+            for stu in trip.stop_time_update:
+                if stu.stop_id.startswith(station_id) and route_id not in unusual:
+                    direction = (
+                        "Northbound" if stu.stop_id.endswith("N") else
+                        "Southbound" if stu.stop_id.endswith("S") else
+                        "Unknown"
+                    )
+                    unusual[route_id] = {
+                        "route_id": route_id,
+                        "stop_id": stu.stop_id,
+                        "direction": direction,
+                        "trip_id": trip.trip.trip_id,
+                    }
 
     return list(unusual.values())
 
@@ -570,19 +595,27 @@ def main() -> None:
 
             # 2b. Unusual routes
             if alerts_cfg.get("unusual_routes", True):
-                print("   ── Checking for unusual routes…")
-                try:
-                    if bdfm_feed is None:
-                        bdfm_feed = fetch_feed(BDFM_FEED_URL, api_key)
-                    unusual = find_unusual_routes(bdfm_feed, config)
-                    if unusual:
-                        print(f"      Found {len(unusual)} unusual route(s):")
-                        for r in unusual:
-                            send_unusual_route_notification(webhook_url, r, role_id, station_name)
-                    else:
-                        print("      No unusual routes. ✅")
-                except requests.RequestException as exc:
-                    print(f"      ERROR fetching BDFM feed: {exc}")
+                print("   ── Checking for unusual routes across subway feeds (including A/C)…")
+                feeds_to_check: list[gtfs_realtime_pb2.FeedMessage] = []
+                for feed_name, feed_url in UNUSUAL_ROUTES_FEEDS.items():
+                    try:
+                        if feed_name == "BDFM" and bdfm_feed is not None:
+                            feeds_to_check.append(bdfm_feed)
+                        else:
+                            feed_data = fetch_feed(feed_url, api_key)
+                            feeds_to_check.append(feed_data)
+                            if feed_name == "BDFM":
+                                bdfm_feed = feed_data
+                    except requests.RequestException as exc:
+                        print(f"      Warning: could not fetch {feed_name} feed: {exc}")
+
+                unusual = find_unusual_routes(feeds_to_check, config)
+                if unusual:
+                    print(f"      Found {len(unusual)} unusual route(s):")
+                    for r in unusual:
+                        send_unusual_route_notification(webhook_url, r, role_id, station_name)
+                else:
+                    print("      No unusual routes. ✅")
         else:
             print("🚨 SERVICE ALERTS — outside time window, skipping")
         print()
